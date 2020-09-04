@@ -26,6 +26,8 @@ python setup.py install
 
 ## Usage
 
+Assuming pre-authenticated token (OS_AUTH_TOKEN) and storage_url (OS_STORAGE_URL) are available in the os.environ
+
 1. using zarr
 
 ```pythonw

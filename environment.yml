@@ -1,0 +1,7 @@
+name: swiftstore
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - zarr
+  - python-swiftclient

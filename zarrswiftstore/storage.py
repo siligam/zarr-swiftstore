@@ -14,52 +14,77 @@ from swiftclient.client import Connection
 
 
 class SwiftStore(MutableMapping):
-    """Storage class using openstack swift object store
-    
+    """Storage class using openstack swift object store.
+
+    To establish a connection to swift object store, provide (authurl, user, key)
+    or (preauthurl, preauthtoken). Other way to provide these values is through
+    os.environ. (ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN)
+
     Parameters
     ----------
     container: string
         The name of the swift object container
     prefix: string
         sub-directory path with in the container to store data
-    storageurl: string
-        openstack swift object storege url
-    token: string
-        pre-authenticated token to aceess object storage 
+    authurl: string
+        authentication url
+    user: string
+        user details of the form "account:user"
+    key: string
+        key is password
+    preauthurl: string
+        storage-url
+    preauthtoken: string
+        pre-authenticated token to aceess object storage
     """
-    def __init__(self, container, prefix='', storageurl=None, token=None):
+    def __init__(self, container, prefix='', authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None):
         self.container = container
         self.prefix = normalize_storage_path(prefix)
-        storageurl = storageurl or os.environ.get('OS_STORAGE_URL')
-        token = token or os.environ.get('OS_AUTH_TOKEN')
-        if (storageurl is None) or (token is None):
-            raise ValueError('Missing storageurl/token')
-        self.client = Connection(preauthurl=storageurl, preauthtoken=token)
+        self.conn = self._make_connection(authurl, user, key, preauthurl, preauthtoken)
         self._ensure_container()
-        
+
+    def _make_connection(self, authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None):
+        "make a connection object either from pre-authenticated token or using authurl"
+        getenv = os.environ.get
+        authurl = authurl or getenv('ST_AUTH')
+        user = user or getenv('ST_USER')
+        key = key or getenv('ST_KEY')
+        preauthurl = preauthurl or getenv('OS_STORAGE_URL')
+        preauthtoken = preauthtoken or getenv('OS_AUTH_TOKEN')
+        if preauthurl and preauthtoken:
+            conn = Connection(preauthurl=preauthurl, preauthtoken=preauthtoken)
+        elif authurl and user and key:
+            conn = Connection(authurl, user=user, key=key)
+        else:
+            raise ValueError(
+            'Missing required (authurl, user, key) or (preauthurl, preauthtoken) '
+            'values to establish a connection'
+            )
+        return conn
+
     def _ensure_container(self):
-        _, contents = self.client.get_account()
+        _, contents = self.conn.get_account()
         listings = [item['name'] for item in contents]
         if self.container not in listings:
-            self.client.put_container(self.container)
+            self.conn.put_container(self.container)
 
     def _add_prefix(self, path):
         path = '/'.join([self.prefix, path])
         return normalize_storage_path(path)
-    
+
     def __getitem__(self, name):
         name = self._add_prefix(name)
-        resp, content = self.client.get_object(self.container, name)
+        resp, content = self.conn.get_object(self.container, name)
         return content
-    
+
     def __setitem__(self, name, value):
         name = self._add_prefix(name)
         # value = ensure_bytes(value)
-        self.client.put_object(self.container, name, value)
-    
+        self.conn.put_object(self.container, name, value)
+
     def __delitem__(self, name):
         name = self._add_prefix(name)
-        self.client.delete_object(self.container, name)
+        self.conn.delete_object(self.container, name)
 
     def __eq__(self, other):
         return (
@@ -67,13 +92,13 @@ class SwiftStore(MutableMapping):
             self.container == other.container and
             self.prefix == other.prefix
         )
-        
+
     def listdir(self, path=None, with_prefix=False):
         if path is None:
             path = self.prefix
         else:
             path = self._add_prefix(path)
-        _, contents = self.client.get_container(self.container, prefix=path)
+        _, contents = self.conn.get_container(self.container, prefix=path)
         listings = [entry['name'] for entry in contents]
         if not with_prefix and self.prefix:
             # remove prefix length + trailing slash
@@ -87,31 +112,30 @@ class SwiftStore(MutableMapping):
     def __iter__(self):
         for entry in self.listdir():
             yield entry
-            
+
     def keys(self):
         return list(self.__iter__())
-    
+
     def __len__(self):
         return len(self.keys())
-    
+
     def getsize(self, path=None):
         'object(s) size in bytes'
         if path is None:
             path = self.prefix
         else:
             path = self._add_prefix(path)
-        _, contents = self.client.get_container(self.container, prefix=path)
+        _, contents = self.conn.get_container(self.container, prefix=path)
         try:
             size = contents['bytes']
         except TypeError:
             size = sum(entry['bytes'] for entry in contents)
         return size
-    
+
     def rmdir(self, path=None):
         for entry in self.listdir(path, with_prefix=True):
-            self.client.delete_object(self.container, entry)
+            self.conn.delete_object(self.container, entry)
         return
-    
+
     def clear(self):
         self.rmdir()
-    

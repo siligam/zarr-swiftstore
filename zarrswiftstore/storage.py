@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 
 """
-SwfitStore provides a storage back-end for zarr
+SwiftStore provides openstack swift object storage backend for zarr
 
-This class is modeled after ABSStore (zarr.store.ABSStore)
+This class is developed using zarr.ABSStore as reference
+(https://github.com/zarr-developers/zarr-python)
 """
 
 import os
 from collections.abc import MutableMapping
-from zarr.util import normalize_storage_path
+
 from swiftclient.client import Connection
-# from numcodecs.compact import ensure_bytes
+import swiftclient.exceptions
+from zarr.util import normalize_storage_path
+
+from numcodecs.compat import ensure_bytes
 
 
 class SwiftStore(MutableMapping):
@@ -74,17 +78,23 @@ class SwiftStore(MutableMapping):
 
     def __getitem__(self, name):
         name = self._add_prefix(name)
-        resp, content = self.conn.get_object(self.container, name)
+        try:
+            resp, content = self.conn.get_object(self.container, name)
+        except swiftclient.exceptions.ClientException:
+            raise KeyError('Object {} not found'.format(name))
         return content
 
     def __setitem__(self, name, value):
         name = self._add_prefix(name)
-        # value = ensure_bytes(value)
+        value = ensure_bytes(value)
         self.conn.put_object(self.container, name, value)
 
     def __delitem__(self, name):
         name = self._add_prefix(name)
-        self.conn.delete_object(self.container, name)
+        try:
+            self.conn.delete_object(self.container, name)
+        except swiftclient.exceptions.ClientException:
+            raise KeyError('Object {} not found'.format(name))
 
     def __eq__(self, other):
         return (

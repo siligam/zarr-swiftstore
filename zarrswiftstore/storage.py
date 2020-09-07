@@ -130,16 +130,14 @@ class SwiftStore(MutableMapping):
         return len(self.keys())
 
     def getsize(self, path=None):
-        'object(s) size in bytes'
-        if path is None:
-            path = self.prefix
-        else:
-            path = self._add_prefix(path)
-        _, contents = self.conn.get_container(self.container, prefix=path)
-        try:
-            size = contents['bytes']
-        except TypeError:
-            size = sum(entry['bytes'] for entry in contents)
+        'container or object size in bytes'
+        path = self.prefix if path is None else self._add_prefix(path)
+        if path:
+            content = self.conn.head_object(self.container, path)
+            size = int(content['content-length'])
+            return size
+        content = self.conn.head_container(self.container)
+        size = int(content['x-container-bytes-used'])
         return size
 
     def rmdir(self, path=None):

@@ -1,7 +1,7 @@
 import unittest
 import pytest
 
-from zarrswiftstore.storage import SwiftStore
+from .. import SwiftStore
 
 from zarr.tests.test_storage import StoreTests
 from zarr.tests.util import CountingDict, skip_test_env_var

@@ -12,7 +12,7 @@ setup(
     description='swift storage backend for zarr',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    packages=['zarrswiftstore', 'zarrswiftstore.tests'],
+    packages=['zarrswift', 'zarrswift.tests'],
     install_requires =[
         'zarr',
         'python-swiftclient',

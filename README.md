@@ -32,7 +32,7 @@ Assuming pre-authenticated token (OS_AUTH_TOKEN) and storage_url (OS_STORAGE_URL
 
 ```pythonw
 import zarr
-from zarrswiftstore.storage import SwiftStore
+from zarrswift import SwiftStore
 
 store = SwiftStore(container='test', prefix='zarr-demo')
 root = zarr.group(store=store, overwrite=True)
@@ -44,7 +44,7 @@ z[:] = 42
 ```pythonw
 import xarray as xr
 import numpy as np
-from zarrswiftstore.storage import SwiftStore
+from zarrswift import SwiftStore
 
 ds = xr.Dataset(
         {"foo": (('x', 'y'), np.random.rand(4, 5))},
@@ -60,9 +60,3 @@ ds.to_zarr(store=store, mode='w', consolidated=True)
 # load
 ds = xr.open_zarr(store=store, consolidated=True)
 ```
-
-
-
-
-
-

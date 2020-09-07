@@ -108,7 +108,7 @@ class SwiftStore(MutableMapping):
 
     def __delitem__(self, name):
         name = self._add_prefix(name)
-        if name in self._keys:
+        if name in self._record_keys:
             self.conn.delete_object(self.container, name)
             self._record_keys.remove(name)
         else:

@@ -15,6 +15,7 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         store.rmdir()
         return store
 
+    @pytest.mark.skip(reason="No way to get hierarchy through getsize")
     def test_hierarchy(self):
         # Skip hierarchy test as SwiftStore does not support it via getsize
         pass

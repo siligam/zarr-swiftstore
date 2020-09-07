@@ -46,6 +46,7 @@ class SwiftStore(MutableMapping):
         self.prefix = normalize_storage_path(prefix)
         self.conn = self._make_connection(authurl, user, key, preauthurl, preauthtoken)
         self._ensure_container()
+        self._record_keys = set()
 
     def _make_connection(self, authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None):
         "make a connection object either from pre-authenticated token or using authurl"
@@ -76,11 +77,19 @@ class SwiftStore(MutableMapping):
         path = '/'.join([self.prefix, path])
         return normalize_storage_path(path)
 
+    # def __getitem__(self, name):
+    #     name = self._add_prefix(name)
+    #     try:
+    #         resp, content = self.conn.get_object(self.container, name)
+    #     except swiftclient.exceptions.ClientException:
+    #         raise KeyError('Object {} not found'.format(name))
+    #     return content
+
     def __getitem__(self, name):
         name = self._add_prefix(name)
-        try:
-            resp, content = self.conn.get_object(self.container, name)
-        except swiftclient.exceptions.ClientException:
+        if name in self._record_keys:
+            _, content = self.conn.get_object(self.container, name)
+        else:
             raise KeyError('Object {} not found'.format(name))
         return content
 
@@ -88,12 +97,21 @@ class SwiftStore(MutableMapping):
         name = self._add_prefix(name)
         value = ensure_bytes(value)
         self.conn.put_object(self.container, name, value)
+        self._record_keys.add(name)
+
+    # def __delitem__(self, name):
+    #     name = self._add_prefix(name)
+    #     try:
+    #         self.conn.delete_object(self.container, name)
+    #     except swiftclient.exceptions.ClientException:
+    #         raise KeyError('Object {} not found'.format(name))
 
     def __delitem__(self, name):
         name = self._add_prefix(name)
-        try:
+        if name in self._keys:
             self.conn.delete_object(self.container, name)
-        except swiftclient.exceptions.ClientException:
+            self._record_keys.remove(name)
+        else:
             raise KeyError('Object {} not found'.format(name))
 
     def __eq__(self, other):

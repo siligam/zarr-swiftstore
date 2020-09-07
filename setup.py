@@ -9,11 +9,10 @@ long_description = (here / "README.md").read_text(encoding='utf-8')
 
 setup(
     name='zarrswiftstore',
-    version="0.0.1",
     description='swift storage backend for zarr',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    packages=find_packages(where='zarrswiftstore'),
+    packages=['zarrswiftstore', 'zarrswiftstore.tests'],
     install_requires =[
         'zarr',
         'python-swiftclient',

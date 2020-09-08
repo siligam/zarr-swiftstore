@@ -21,8 +21,8 @@ class SwiftStore(MutableMapping):
     """Storage class using openstack swift object store.
 
     To establish a connection to swift object store, provide (authurl, user, key)
-    or (preauthurl, preauthtoken). Other way to provide these values is through
-    os.environ. (ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN)
+    or (preauthurl, preauthtoken). Another way to provide these values is through
+    environment variables (ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN)
 
     Parameters
     ----------

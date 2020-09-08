@@ -1,36 +1,27 @@
 # zarr-swiftstore
-openstack swift object storage back-end for zarr
-
+openstack swift object storage backend for zarr. It enables direct access to
+object storage to read and write zarr datasets.
 
 ## Install
 
 ```bash
-python setup.py install
-```
-
-or for development version use pip
-
-```bash
-pip install -e .
-```
-
-If pip is unable to install numcodecs then use conda to install dependencies
-
-```bash
-conda env update --file environment.yml
-conda activate swiftsotre
-python setup.py install
-# or
-# pip install -e .
+conda create -n swiftstore python=3.6
+conda activate swiftstore
+pip install git+https://github.com/siligam/zarr-swiftstore.git
 ```
 
 ## Usage
 
-Assuming pre-authenticated token (OS_AUTH_TOKEN) and storage_url (OS_STORAGE_URL) are available in the os.environ
+SwiftStore authentication requires (authurl, user, key) or (preauthurl, preauthtoken)
+values. Alternative way of providing these values is through environment variables
+(ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN).
+
+In the following examples the authentication information is provided through
+environment variables.
 
 1. using zarr
 
-```pythonw
+```python
 import zarr
 from zarrswift import SwiftStore
 
@@ -41,6 +32,7 @@ z[:] = 42
 ```
 
 2. using xarray
+
 ```pythonw
 import xarray as xr
 import numpy as np

@@ -50,7 +50,7 @@ class SwiftStore(MutableMapping):
         self.prefix = normalize_storage_path(prefix)
         self.conn = self._make_connection(authurl, user, key, preauthurl, preauthtoken)
         self._ensure_container()
-        self._record_keys = set()
+        self._record_keys = set(self.listdir())
 
     def _make_connection(self, authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None):
         "make a connection object either from pre-authenticated token or using authurl"

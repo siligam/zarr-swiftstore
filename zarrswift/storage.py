@@ -17,6 +17,10 @@ from zarr.util import normalize_storage_path
 from numcodecs.compat import ensure_bytes
 
 
+class AuthMissingParameter(KeyError):
+    pass
+
+
 class SwiftStore(MutableMapping):
     """Storage class using openstack swift object store.
 
@@ -61,9 +65,8 @@ class SwiftStore(MutableMapping):
         elif authurl and user and key:
             conn = Connection(authurl, user=user, key=key)
         else:
-            raise ValueError(
-            'Missing required (authurl, user, key) or (preauthurl, preauthtoken) '
-            'values to establish a connection'
+            raise AuthMissingParameter(
+            'Missing required values (authurl, user, key) or (preauthurl, preauthtoken)'
             )
         return conn
 

@@ -17,6 +17,7 @@ setup(
     install_requires=[
         'zarr',
         'python-swiftclient',
+        'numcodecs>=0.6.4',
     ],
     classifiers=[
         'Intended Audience :: Developers',

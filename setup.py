@@ -9,7 +9,7 @@ long_description = (here / "README.md").read_text(encoding='utf-8')
 
 setup(
     name='zarrswiftstore',
-    version="1.1.0-beta",
+    version="1.1.1-beta",
     description='swift storage backend for zarr',
     long_description=long_description,
     long_description_content_type='text/markdown',

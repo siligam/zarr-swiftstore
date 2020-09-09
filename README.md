@@ -25,7 +25,7 @@ environment variables.
 import zarr
 from zarrswift import SwiftStore
 
-store = SwiftStore(container='test', prefix='zarr-demo')
+store = SwiftStore(container='demo', prefix='zarr-demo')
 root = zarr.group(store=store, overwrite=True)
 z = root.zeros('foo/bar', shape=(10, 10), chunks=(5, 5), dtype='i4')
 z[:] = 42
@@ -46,9 +46,15 @@ ds = xr.Dataset(
         },
 }
 
-store = SwiftStore(container='test', prefix='xarray-demo')
+store = SwiftStore(container='demo', prefix='xarray-demo')
 ds.to_zarr(store=store, mode='w', consolidated=True)
 
 # load
 ds = xr.open_zarr(store=store, consolidated=True)
+```
+
+## Test
+To run test, set environment variable ZARR_TEST_SWIFT=1
+```bash
+pytest -v zarrswift
 ```

@@ -10,7 +10,7 @@ This class is developed using zarr.ABSStore as reference
 import os
 from collections.abc import MutableMapping
 
-from swiftclient.client import Connection
+from swiftclient import Connection
 import swiftclient.exceptions
 from zarr.util import normalize_storage_path
 

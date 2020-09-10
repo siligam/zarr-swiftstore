@@ -8,7 +8,7 @@ here = pathlib.Path(__file__).parent.resolve()
 long_description = (here / "README.md").read_text(encoding='utf-8')
 
 setup(
-    name='zarrswiftstore',
+    name='zarr-swiftstore',
     version="1.1.1-beta",
     description='swift storage backend for zarr',
     long_description=long_description,
@@ -25,7 +25,7 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.6',
+        # 'Programming Language :: Python :: 3.6',
     ],
     author='Pavan Siligam',
     author_email='pavan.siligam@gmail.com',

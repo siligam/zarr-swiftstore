@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from setuptools import setup, find_packages
+from setuptools import setup
 import pathlib
 
 
@@ -9,27 +9,29 @@ long_description = (here / "README.md").read_text(encoding='utf-8')
 
 setup(
     name='zarr-swiftstore',
-    version="1.1.1-beta",
+    version="1.1.2",
     description='swift storage backend for zarr',
     long_description=long_description,
     long_description_content_type='text/markdown',
+    python_requires=">=3.5",
+    package_dir={'': '.'},
     packages=['zarrswift', 'zarrswift.tests'],
     install_requires=[
-        'zarr',
-        'python-swiftclient',
-        #'numcodecs>=0.6.4',
+        'zarr>=2.4.0',
+        'python-swiftclient>=3.10.0',
     ],
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: Information Technology',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
-        # 'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     author='Pavan Siligam',
     author_email='pavan.siligam@gmail.com',
     license='MIT',
     url="https://github.com/siligam/zarr-swiftstore",
-    python_requires=">=3.6",
 )

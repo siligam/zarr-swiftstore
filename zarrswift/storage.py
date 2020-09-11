@@ -160,6 +160,7 @@ class SwiftStore(MutableMapping):
                 item, _ = item.split('/', 1)
             if item:
                 result.append(item)
+        result = sorted(set(result))
         return result
 
     def _walk(self, path=None, with_prefix=False):

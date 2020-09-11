@@ -23,11 +23,6 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         store.rmdir()
         return store
 
-    @pytest.mark.skip(reason="No way to get hierarchy through getsize")
-    def test_hierarchy(self):
-        # Skip hierarchy test as SwiftStore does not support it via getsize
-        pass
-
     def test_iterators_with_prefix(self):
         for prefix in [
             "test_prefix",
@@ -78,11 +73,11 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         store.conn.delete_container(store.container)
         assert store.container not in list_containers(store.conn)
 
-    def test_listdir(self):
+    def test_walk(self):
         store = self.create_store(prefix="foo6")
         store["a"] = b"aaaa"
-        assert "a" in store.listdir()
-        assert "foo6/a" in store.listdir(with_prefix=True)
+        assert "a" in store._walk()
+        assert "foo6/a" in store._walk(with_prefix=True)
 
     def test_authmissingparameter(self):
         names = "ST_AUTH ST_USER ST_KEY OS_STORAGE_URL OS_AUTH_TOKEN".split()
@@ -101,3 +96,93 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
             container=store1.container, preauthurl=storageurl, preauthtoken=token
         )
         assert store1 == store2
+
+    def test_hierarchy(self):
+        # setup
+        store = self.create_store()
+        store['a'] = b'aaa'
+        store['b'] = b'bbb'
+        store['c/d'] = b'ddd'
+        store['c/e/f'] = b'fff'
+        store['c/e/g'] = b'ggg'
+
+        # check keys
+        assert 'a' in store
+        assert 'b' in store
+        assert 'c/d' in store
+        assert 'c/e/f' in store
+        assert 'c/e/g' in store
+        assert 'c' not in store
+        assert 'c/' not in store
+        assert 'c/e' not in store
+        assert 'c/e/' not in store
+        assert 'c/d/x' not in store
+
+        # check __getitem__
+        with pytest.raises(KeyError):
+            store['c']
+        with pytest.raises(KeyError):
+            store['c/e']
+        with pytest.raises(KeyError):
+            store['c/d/x']
+
+        # test getsize (optional)
+        if hasattr(store, 'getsize'):
+            # assert 6 == store.getsize()  # how is this 6? (5 * 3 bytes)
+            assert 15 == store.getsize()
+            assert 3 == store.getsize('a')
+            assert 3 == store.getsize('b')
+            # assert 3 == store.getsize('c')  # how is this 3? (3 * 3bytes)
+            assert 9 == store.getsize('c')
+            assert 3 == store.getsize('c/d')
+            assert 6 == store.getsize('c/e')
+            assert 3 == store.getsize('c/e/f')
+            assert 3 == store.getsize('c/e/g')
+            # non-existent paths
+            assert 0 == store.getsize('x')
+            assert 0 == store.getsize('a/x')
+            assert 0 == store.getsize('c/x')
+            assert 0 == store.getsize('c/x/y')
+            assert 0 == store.getsize('c/d/y')
+            assert 0 == store.getsize('c/d/y/z')
+
+        # test listdir (optional)
+        if hasattr(store, 'listdir'):
+            assert {'a', 'b', 'c'} == set(store.listdir())
+            assert {'d', 'e'} == set(store.listdir('c'))
+            assert {'f', 'g'} == set(store.listdir('c/e'))
+            # no exception raised if path does not exist or is leaf
+            assert [] == store.listdir('x')
+            assert [] == store.listdir('a/x')
+            assert [] == store.listdir('c/x')
+            assert [] == store.listdir('c/x/y')
+            assert [] == store.listdir('c/d/y')
+            assert [] == store.listdir('c/d/y/z')
+            assert [] == store.listdir('c/e/f')
+
+        # test rmdir (optional)
+        if hasattr(store, 'rmdir'):
+            store.rmdir('c/e')
+            assert 'c/d' in store
+            assert 'c/e/f' not in store
+            assert 'c/e/g' not in store
+            store.rmdir('c')
+            assert 'c/d' not in store
+            store.rmdir()
+            assert 'a' not in store
+            assert 'b' not in store
+            store['a'] = b'aaa'
+            store['c/d'] = b'ddd'
+            store['c/e/f'] = b'fff'
+            # no exceptions raised if path does not exist or is leaf
+            store.rmdir('x')
+            store.rmdir('a/x')
+            store.rmdir('c/x')
+            store.rmdir('c/x/y')
+            store.rmdir('c/d/y')
+            store.rmdir('c/d/y/z')
+            store.rmdir('c/e/f')
+            assert 'a' in store
+            assert 'c/d' in store
+            # assert 'c/e/f' in store  # this is false statement. removed earlier
+            assert 'c/e/f' not in store

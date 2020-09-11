@@ -60,7 +60,7 @@ class SwiftStore(MutableMapping):
         self.prefix = normalize_storage_path(prefix)
         self.conn = self._make_connection(authurl, user, key, preauthurl, preauthtoken)
         self._ensure_container()
-        self._record_keys = set(self.listdir())
+        self._record_keys = set(self._walk())
 
     def _make_connection(
         self, authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None
@@ -91,6 +91,14 @@ class SwiftStore(MutableMapping):
     def _add_prefix(self, path):
         path = "/".join([self.prefix, path])
         return normalize_storage_path(path)
+
+    def _drop_prefix(self, path):
+        path = normalize_storage_path(path)
+        prefix = self.prefix
+        if prefix:
+            if path.startswith(prefix):
+                return normalize_storage_path(path[len(prefix)+1:])
+        return path
 
     # def __getitem__(self, name):
     #     name = self._add_prefix(name)
@@ -136,7 +144,25 @@ class SwiftStore(MutableMapping):
             and self.prefix == other.prefix
         )
 
-    def listdir(self, path=None, with_prefix=False):
+    def listdir(self, path=None):
+        if path is None:
+            path = self.prefix
+        else:
+            path = self._add_prefix(path)
+        _, contents = self.conn.get_container(self.container, prefix=path)
+        listings = [entry["name"] for entry in contents]
+        if path:
+            prefix_size = len(path) + 1
+            listings = [entry[prefix_size:] for entry in listings]
+        result = []
+        for item in listings:
+            if '/' in item:
+                item, _ = item.split('/', 1)
+            if item:
+                result.append(item)
+        return result
+
+    def _walk(self, path=None, with_prefix=False):
         if path is None:
             path = self.prefix
         else:
@@ -150,10 +176,10 @@ class SwiftStore(MutableMapping):
         return listings
 
     def __contains__(self, name):
-        return name in self.listdir()
+        return name in self._walk()
 
     def __iter__(self):
-        for entry in self.listdir():
+        for entry in self._walk():
             yield entry
 
     def keys(self):
@@ -166,17 +192,26 @@ class SwiftStore(MutableMapping):
         "container or object size in bytes"
         path = self.prefix if path is None else self._add_prefix(path)
         if path:
-            content = self.conn.head_object(self.container, path)
-            size = int(content["content-length"])
-            return size
+            if path in self._record_keys:
+                content = self.conn.head_object(self.container, path)
+                size = int(content["content-length"])
+                return size
+            else:
+                # dealing with pseudo folders
+                keys = [key for key in self._record_keys if key.startswith(path)]
+                contents = [self.conn.head_object(self.container, key) for key in keys]
+                size = sum(int(content["content-length"]) for content in contents)
+                return size
         content = self.conn.head_container(self.container)
         size = int(content["x-container-bytes-used"])
         return size
 
     def rmdir(self, path=None):
-        for entry in self.listdir(path, with_prefix=True):
+        for entry in self._walk(path, with_prefix=True):
             self.conn.delete_object(self.container, entry)
-        return
+            entry = self._drop_prefix(entry)
+            if entry in self._record_keys:
+                self._record_keys.remove(entry)
 
     def clear(self):
         self.rmdir()

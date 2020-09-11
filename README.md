@@ -5,9 +5,9 @@ object storage to read and write zarr datasets.
 ## Install
 
 ```bash
-conda create -n swiftstore python=3.6
-conda activate swiftstore
-pip install git+https://github.com/siligam/zarr-swiftstore.git
+git clone https://github.com/siligam/zarr-swiftstore.git
+cd zarr-swiftstore
+python setup.py install
 ```
 
 ## Usage
@@ -33,7 +33,7 @@ z[:] = 42
 
 2. using xarray
 
-```pythonw
+```python
 import xarray as xr
 import numpy as np
 from zarrswift import SwiftStore
@@ -56,5 +56,6 @@ ds = xr.open_zarr(store=store, consolidated=True)
 ## Test
 To run test, set environment variable ZARR_TEST_SWIFT=1
 ```bash
+export ZARR_TEST_SWIFT=1
 pytest -v zarrswift
 ```

@@ -97,7 +97,7 @@ class SwiftStore(MutableMapping):
         prefix = self.prefix
         if prefix:
             if path.startswith(prefix):
-                return normalize_storage_path(path[len(prefix)+1:])
+                return normalize_storage_path(path[len(prefix) + 1 :])
         return path
 
     # def __getitem__(self, name):
@@ -156,8 +156,8 @@ class SwiftStore(MutableMapping):
             listings = [entry[prefix_size:] for entry in listings]
         result = []
         for item in listings:
-            if '/' in item:
-                item, _ = item.split('/', 1)
+            if "/" in item:
+                item, _ = item.split("/", 1)
             if item:
                 result.append(item)
         result = sorted(set(result))
@@ -190,22 +190,15 @@ class SwiftStore(MutableMapping):
         return len(self.keys())
 
     def getsize(self, path=None):
-        "container or object size in bytes"
         path = self.prefix if path is None else self._add_prefix(path)
-        if path:
-            if path in self._record_keys:
-                content = self.conn.head_object(self.container, path)
-                size = int(content["content-length"])
-                return size
-            else:
-                # dealing with pseudo folders
-                keys = [key for key in self._record_keys if key.startswith(path)]
-                contents = [self.conn.head_object(self.container, key) for key in keys]
-                size = sum(int(content["content-length"]) for content in contents)
-                return size
-        content = self.conn.head_container(self.container)
-        size = int(content["x-container-bytes-used"])
-        return size
+        _, contents = self.conn.get_container(self.container, prefix=path)
+        prefix_len = len(path)
+        sizes = [
+            entry["bytes"]
+            for entry in contents
+            if "/" not in normalize_storage_path(entry["name"][prefix_len:])
+        ]
+        return sum(sizes)
 
     def rmdir(self, path=None):
         for entry in self._walk(path, with_prefix=True):

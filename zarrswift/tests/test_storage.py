@@ -7,7 +7,7 @@ import os
 from .. import SwiftStore, AuthMissingParameter
 
 from zarr.tests.test_storage import StoreTests
-from zarr.tests.util import CountingDict, skip_test_env_var
+from zarr.tests.util import skip_test_env_var
 
 
 def list_containers(conn):
@@ -20,8 +20,12 @@ def list_containers(conn):
 class TestSwiftStore(StoreTests, unittest.TestCase):
     def create_store(self, prefix=None):
         store = SwiftStore(container="test_swiftstore", prefix=prefix)
-        store.rmdir()
+        store.clear()
         return store
+
+    def tearDown(self):
+        store = SwiftStore(container="test_swiftstore")
+        store.clear()
 
     def test_iterators_with_prefix(self):
         for prefix in [
@@ -62,6 +66,7 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
     def test_equal(self):
         store1 = self.create_store()
         store2 = self.create_store()
+        assert store1 == store2
 
     def test_ensure_container(self):
         store = self.create_store()
@@ -83,7 +88,7 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         names = "ST_AUTH ST_USER ST_KEY OS_STORAGE_URL OS_AUTH_TOKEN".split()
         env = {name: os.environ.pop(name) for name in names if name in os.environ}
         with pytest.raises(AuthMissingParameter):
-            store = self.create_store()
+            self.create_store()
         for name, val in env.items():
             os.environ[name] = val
 
@@ -128,12 +133,10 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
 
         # test getsize (optional)
         if hasattr(store, 'getsize'):
-            # assert 6 == store.getsize()  # how is this 6? (5 * 3 bytes)
-            assert 15 == store.getsize()
+            assert 6 == store.getsize()
             assert 3 == store.getsize('a')
             assert 3 == store.getsize('b')
-            # assert 3 == store.getsize('c')  # how is this 3? (3 * 3bytes)
-            assert 9 == store.getsize('c')
+            assert 3 == store.getsize('c')
             assert 3 == store.getsize('c/d')
             assert 6 == store.getsize('c/e')
             assert 3 == store.getsize('c/e/f')

@@ -1,91 +1,68 @@
 # -*- coding: utf-8 -*-
 
 """
-SwiftStore provides openstack swift object storage backend for zarr
+SwiftStore provides Openstack Swift Object Storage backend for zarr
 
 This class is developed using zarr.ABSStore as reference
 (https://github.com/zarr-developers/zarr-python)
 """
 
-import os
+
 from collections.abc import MutableMapping
 
 from swiftclient import Connection
-import swiftclient.exceptions
+from swiftclient.exceptions import ClientException
 from zarr.util import normalize_storage_path
-
 from numcodecs.compat import ensure_bytes
 
 
-class AuthMissingParameter(KeyError):
-    pass
-
-
 class SwiftStore(MutableMapping):
-    """Storage class using openstack swift object store.
-
-    To establish a connection to swift object store, provide (authurl, user, key)
-    or (preauthurl, preauthtoken). Another way to provide these values is through
-    environment variables (ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN)
+    """Storage class using Openstack Swift Object Store.
 
     Parameters
     ----------
     container: string
-        The name of the swift object container
+        swift container to use. It is created if it does not already exists
     prefix: string
         sub-directory path with in the container to store data
-    authurl: string
-        authentication url
-    user: string
-        user details of the form "account:user"
-    key: string
-        key is password
-    preauthurl: string
-        storage-url
-    preauthtoken: string
-        pre-authenticated token to aceess object storage
+    storage_options: dict
+        authentication information to connect to the swift store.
+
+    Examples
+    --------
+
+    >>> import os
+    >>> from zarrswift import SwiftStore
+    >>> getenv = os.environ.get
+    >>> options = {'preauthurl': getenv('OS_STORAGE_URL'),
+    ...            'preauthtoken': getenv('OS_AUTH_TOKEN')}
+    >>> store = SwiftStore(container="demo", prefix="zarr_demo", storage_options=options)
+    >>> root = zarr.group(store=store, overwrite=True)
+    >>> z = root.zeros('foo/bar', shape=(10, 10), chunks=(5, 5), dtype='i4')
+    >>> z[:] = 42
     """
 
-    def __init__(
-        self,
-        container,
-        prefix="",
-        authurl=None,
-        user=None,
-        key=None,
-        preauthurl=None,
-        preauthtoken=None,
-    ):
+    def __init__(self, container, prefix="", storage_options=None):
         self.container = container
         self.prefix = normalize_storage_path(prefix)
-        self.conn = self._make_connection(authurl, user, key, preauthurl, preauthtoken)
+        self.storage_options = storage_options or {}
+        self.conn = Connection(**self.storage_options)
         self._ensure_container()
 
-    def _make_connection(
-        self, authurl=None, user=None, key=None, preauthurl=None, preauthtoken=None
-    ):
-        "make a connection object either from pre-authenticated token or using authurl"
-        getenv = os.environ.get
-        authurl = authurl or getenv("ST_AUTH")
-        user = user or getenv("ST_USER")
-        key = key or getenv("ST_KEY")
-        preauthurl = preauthurl or getenv("OS_STORAGE_URL")
-        preauthtoken = preauthtoken or getenv("OS_AUTH_TOKEN")
-        if preauthurl and preauthtoken:
-            conn = Connection(preauthurl=preauthurl, preauthtoken=preauthtoken)
-        elif authurl and user and key:
-            conn = Connection(authurl, user=user, key=key)
-        else:
-            raise AuthMissingParameter(
-                "Missing required values (authurl, user, key) or (preauthurl, preauthtoken)"
-            )
-        return conn
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['conn']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.conn = Connection(**self.storage_options)
 
     def __getitem__(self, name):
         name = self._add_prefix(name)
         try:
             resp, content = self.conn.get_object(self.container, name)
-        except swiftclient.exceptions.ClientException:
+        except ClientException:
             raise KeyError('Object {} not found'.format(name))
         return content
 
@@ -98,7 +75,7 @@ class SwiftStore(MutableMapping):
         name = self._add_prefix(name)
         try:
             self.conn.delete_object(self.container, name)
-        except swiftclient.exceptions.ClientException:
+        except ClientException:
             raise KeyError('Object {} not found'.format(name))
 
     def __eq__(self, other):

@@ -1,1 +1,1 @@
-from .storage import SwiftStore, AuthMissingParameter
+from .storage import SwiftStore

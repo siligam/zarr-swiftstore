@@ -4,7 +4,7 @@ import unittest
 import pytest
 import os
 
-from .. import SwiftStore, AuthMissingParameter
+from .. import SwiftStore
 
 from zarr.tests.test_storage import StoreTests
 from zarr.tests.util import skip_test_env_var
@@ -19,13 +19,19 @@ def list_containers(conn):
 @skip_test_env_var("ZARR_TEST_SWIFT")
 class TestSwiftStore(StoreTests, unittest.TestCase):
     def create_store(self, prefix=None):
-        store = SwiftStore(container="test_swiftstore", prefix=prefix)
+        getenv = os.environ.get
+        options = {
+            "preauthurl": getenv("OS_STORAGE_URL"),
+            "preauthtoken": getenv("OS_AUTH_TOKEN"),
+            "authurl": getenv("ST_AUTH"),
+            "user": getenv("ST_USER"),
+            "key": getenv("ST_KEY"),
+        }
+        store = SwiftStore(
+            container="test_swiftstore", prefix=prefix, storage_options=options
+        )
         store.clear()
         return store
-
-    def tearDown(self):
-        store = SwiftStore(container="test_swiftstore")
-        store.clear()
 
     def test_iterators_with_prefix(self):
         for prefix in [
@@ -77,21 +83,3 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         assert store.container in list_containers(store.conn)
         store.conn.delete_container(store.container)
         assert store.container not in list_containers(store.conn)
-
-    def test_authmissingparameter(self):
-        names = "ST_AUTH ST_USER ST_KEY OS_STORAGE_URL OS_AUTH_TOKEN".split()
-        env = {name: os.environ.pop(name) for name in names if name in os.environ}
-        with pytest.raises(AuthMissingParameter):
-            self.create_store()
-        for name, val in env.items():
-            os.environ[name] = val
-
-    def test_token_authentication(self):
-        "using preauthurl and preauthtoken to create store"
-        store1 = self.create_store()
-        storageurl = store1.conn.url
-        token = store1.conn.token
-        store2 = SwiftStore(
-            container=store1.container, preauthurl=storageurl, preauthtoken=token
-        )
-        assert store1 == store2

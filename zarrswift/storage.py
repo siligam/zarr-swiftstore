@@ -51,7 +51,7 @@ class SwiftStore(MutableMapping):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state['conn']
+        del state["conn"]
         return state
 
     def __setstate__(self, state):
@@ -63,7 +63,7 @@ class SwiftStore(MutableMapping):
         try:
             resp, content = self.conn.get_object(self.container, name)
         except ClientException:
-            raise KeyError('Object {} not found'.format(name))
+            raise KeyError("Object {} not found".format(name))
         return content
 
     def __setitem__(self, name, value):
@@ -76,7 +76,7 @@ class SwiftStore(MutableMapping):
         try:
             self.conn.delete_object(self.container, name)
         except ClientException:
-            raise KeyError('Object {} not found'.format(name))
+            raise KeyError("Object {} not found".format(name))
 
     def __eq__(self, other):
         return (
@@ -91,7 +91,7 @@ class SwiftStore(MutableMapping):
     def __iter__(self):
         contents = self._list_container(strip_prefix=True)
         for entry in contents:
-            yield entry['name']
+            yield entry["name"]
 
     def __len__(self):
         return len(self.keys())
@@ -107,42 +107,46 @@ class SwiftStore(MutableMapping):
         path = "/".join([self.prefix, path])
         return normalize_storage_path(path)
 
-    def _list_container(self, path=None, delimiter=None, strip_prefix=False,
-                        treat_path_as_dir=True):
+    def _list_container(
+        self, path=None, delimiter=None, strip_prefix=False, treat_path_as_dir=True
+    ):
         path = self.prefix if path is None else self._add_prefix(path)
         if path and treat_path_as_dir:
-            path += '/'
+            path += "/"
         _, contents = self.conn.get_container(
-            self.container, prefix=path, delimiter=delimiter)
+            self.container, prefix=path, delimiter=delimiter
+        )
         if strip_prefix:
             prefix_size = len(path)
             for entry in contents:
-                if 'name' in entry:
-                    name = entry['name'][prefix_size:]
-                    entry['name'] = normalize_storage_path(name)
-                if 'subdir' in entry:
-                    name = entry['subdir'][prefix_size:]
-                    entry['name'] = normalize_storage_path(name)
-                    entry['bytes'] = 0
+                if "name" in entry:
+                    name = entry["name"][prefix_size:]
+                    entry["name"] = normalize_storage_path(name)
+                if "subdir" in entry:
+                    name = entry["subdir"][prefix_size:]
+                    entry["name"] = normalize_storage_path(name)
+                    entry["bytes"] = 0
         return contents
 
     def keys(self):
         return list(self.__iter__())
 
     def listdir(self, path=None):
-        contents = self._list_container(path, delimiter='/', strip_prefix=True)
+        contents = self._list_container(path, delimiter="/", strip_prefix=True)
         listings = [entry["name"] for entry in contents]
         return sorted(listings)
 
     def getsize(self, path=None):
-        contents = self._list_container(path, strip_prefix=True, treat_path_as_dir=False)
-        contents = [entry for entry in contents if '/' not in entry['name']]
-        return sum([entry['bytes'] for entry in contents])
+        contents = self._list_container(
+            path, strip_prefix=True, treat_path_as_dir=False
+        )
+        contents = [entry for entry in contents if "/" not in entry["name"]]
+        return sum([entry["bytes"] for entry in contents])
 
     def rmdir(self, path=None):
         contents = self._list_container(path)
         for entry in contents:
-            self.conn.delete_object(self.container, entry['name'])
+            self.conn.delete_object(self.container, entry["name"])
 
     def clear(self):
         self.rmdir()

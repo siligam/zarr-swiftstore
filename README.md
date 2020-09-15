@@ -22,10 +22,16 @@ environment variables.
 1. using zarr
 
 ```python
+import os
 import zarr
 from zarrswift import SwiftStore
 
-store = SwiftStore(container='demo', prefix='zarr-demo')
+auth = {
+    "preauthurl": os.environ["OS_STORAGE_URL"],
+    "preauthtoken": os.environ["OS_AUTH_TOKEN"],
+}
+
+store = SwiftStore(container='demo', prefix='zarr-demo', storage_options=auth)
 root = zarr.group(store=store, overwrite=True)
 z = root.zeros('foo/bar', shape=(10, 10), chunks=(5, 5), dtype='i4')
 z[:] = 42
@@ -46,7 +52,7 @@ ds = xr.Dataset(
         },
 }
 
-store = SwiftStore(container='demo', prefix='xarray-demo')
+store = SwiftStore(container='demo', prefix='xarray-demo', storage_options=auth)
 ds.to_zarr(store=store, mode='w', consolidated=True)
 
 # load

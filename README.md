@@ -12,12 +12,26 @@ python setup.py install
 
 ## Usage
 
-SwiftStore authentication requires (authurl, user, key) or (preauthurl, preauthtoken)
-values. Alternative way of providing these values is through environment variables
-(ST_AUTH, ST_USER, ST_KEY) or (OS_STORAGE_URL, OS_AUTH_TOKEN).
+0. Openstack Swift Object Storage auth_v1.0 requires the following keyword arguments for authentication
 
-In the following examples the authentication information is provided through
-environment variables.
+For initial authentication:
+
+```python
+auth = {
+    "authurl": "...",
+    "user": "{account}:{user}",
+    "key": "{password}",
+}
+```
+
+or if pre-authenticated token is already available:
+
+```python
+auth = {
+    "preauthurl": "...",
+    "preauthtoken": "...",
+}
+```
 
 1. using zarr
 
@@ -60,7 +74,26 @@ ds = xr.open_zarr(store=store, consolidated=True)
 ```
 
 ## Test
-To run test, set environment variable ZARR_TEST_SWIFT=1
+
+Test picks up authentication details from the following environment variables.
+
+If pre-authentication token is already available:
+
+```bash
+export OS_AUTH_TOKEN="..."
+export OS_STORAGE_URL="..."
+```
+
+Otherwise:
+
+```bash
+export ST_AUTH="..."
+export ST_USER="{account}:{user}"
+export ST_KEY="{password}"
+```
+
+Also set environment variable ZARR_TEST_SWIFT=1
+
 ```bash
 export ZARR_TEST_SWIFT=1
 pytest -v zarrswift

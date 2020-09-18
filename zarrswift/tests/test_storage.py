@@ -74,9 +74,10 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         assert store1 == store2
 
     def test_ensure_container(self):
+        import uuid
         store = self.create_store()
         assert store.container in list_containers(store.conn)
-        store.container = "test_ensure_container"
+        store.container = str(uuid.uuid4())[:6]
         assert store.container not in list_containers(store.conn)
         store._ensure_container()
         assert store.container in list_containers(store.conn)

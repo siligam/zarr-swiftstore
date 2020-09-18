@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import pytest
 import os
 
 from .. import SwiftStore

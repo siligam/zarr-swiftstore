@@ -119,13 +119,10 @@ class SwiftStore(MutableMapping):
         if strip_prefix:
             prefix_size = len(path)
             for entry in contents:
-                if "name" in entry:
-                    name = entry["name"][prefix_size:]
-                    entry["name"] = normalize_storage_path(name)
-                if "subdir" in entry:
-                    name = entry["subdir"][prefix_size:]
-                    entry["name"] = normalize_storage_path(name)
-                    entry["bytes"] = 0
+                name = entry.get('name', entry.get('subdir', ''))
+                entry["name"] = normalize_storage_path(name[prefix_size:])
+        for entry in contents:
+            entry["bytes"] = entry.get("bytes", 0)
         return contents
 
     def keys(self):

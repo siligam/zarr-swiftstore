@@ -147,3 +147,10 @@ class SwiftStore(MutableMapping):
 
     def clear(self):
         self.rmdir()
+
+    @property
+    def url(self):
+        _url = '/'.join([self.conn.url, self.container, self.prefix])
+        if not self.prefix:
+            _url = _url.rstrip('/')
+        return _url

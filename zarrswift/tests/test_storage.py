@@ -83,3 +83,11 @@ class TestSwiftStore(StoreTests, unittest.TestCase):
         assert store.container in list_containers(store.conn)
         store.conn.delete_container(store.container)
         assert store.container not in list_containers(store.conn)
+
+    def test_url(self):
+        store = self.create_store()
+        url = '/'.join([store.conn.url, store.container])
+        assert url == store.url
+        store = self.create_store(prefix='test_prefix')
+        url = '/'.join([store.conn.url, store.container, store.prefix])
+        assert url == store.url

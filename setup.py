@@ -19,6 +19,7 @@ setup(
     install_requires=[
         'zarr>=2.4.0',
         'python-swiftclient>=3.10.0',
+        'mock',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

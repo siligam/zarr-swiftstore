@@ -2,7 +2,7 @@
 
 import os
 import pytest
-import requests
+import mock
 from .. import SwiftStore
 from .. import utils
 
@@ -70,8 +70,12 @@ def test_acquire_token():
 
     with pytest.raises(AssertionError):
         utils.acquire_token(authurl, 'someuser', 'invalid_key', update_env=False)
-    
-    
+
+    import getpass
+    with mock.patch('getpass.getpass', return_value=key):
+        utils.acquire_token(authurl, user, update_env=False)
+
+
 def test_is_public():
     auth = {
         "authurl": os.environ.get('ST_AUTH'),

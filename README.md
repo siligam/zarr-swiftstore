@@ -64,7 +64,7 @@ ds = xr.Dataset(
           'x': [10, 20, 30, 40],
           'y': [1, 2, 3, 4, 5],
         },
-}
+)
 
 store = SwiftStore(container='demo', prefix='xarray-demo', storage_options=auth)
 ds.to_zarr(store=store, mode='w', consolidated=True)

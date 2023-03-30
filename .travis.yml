@@ -1,0 +1,31 @@
+language: python
+
+env:
+    global:
+        - ZARR_TEST_SWIFT=1
+        - ST_AUTH=http://localhost:8080/auth/v1.0
+        - ST_USER=test:tester
+        - ST_KEY=testing
+
+services:
+    - docker
+
+matrix:
+    include:
+        - python: 3.6
+        - python: 3.7
+        - python: 3.8
+
+before_install:
+    - docker pull openstackswift/saio
+    - docker run -d -p 8080:8080 openstackswift/saio
+
+install:
+    - pip install -U pip setuptools wheel tox-travis coveralls codecov
+
+script:
+    - tox
+
+after_success:
+    - coveralls --service=travis-pro
+    - codecov

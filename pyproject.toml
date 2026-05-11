@@ -7,7 +7,7 @@ name = "zarr-swiftstore"
 dynamic = ["version"]
 description = "OpenStack Swift object storage backend for zarr"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.12"
 authors = [{ name = "Pavan Siligam", email = "pavan.siligam@gmail.com" }]
 dependencies = [
@@ -19,7 +19,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
 ]

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/installation/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/authentication/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/usage/zarr/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/usage/xarray/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/usage/utilities/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/testing/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/api/</loc>
+      </url>
+      <url>
+        <loc>https://siligam.github.io/zarr-swiftstore/adr/001-native-swift-over-s3-compat/</loc>
+      </url>
+</urlset>

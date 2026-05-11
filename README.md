@@ -5,9 +5,15 @@ object storage to read and write zarr datasets.
 ## Install
 
 ```bash
+pip install zarr-swiftstore
+```
+
+Or from source with [uv](https://docs.astral.sh/uv/):
+
+```bash
 git clone https://github.com/siligam/zarr-swiftstore.git
 cd zarr-swiftstore
-python setup.py install
+uv sync
 ```
 
 ## Usage

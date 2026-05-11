@@ -1,156 +1,287 @@
-# -*- coding: utf-8 -*-
-
 """
-SwiftStore provides Openstack Swift Object Storage backend for zarr
+SwiftStore: OpenStack Swift Object Storage backend for zarr v3.
 
-This class is developed using zarr.ABSStore as reference
-(https://github.com/zarr-developers/zarr-python)
+The store wraps python-swiftclient's synchronous Connection API with
+asyncio.to_thread so that Swift I/O never blocks the event loop.
 """
 
+from __future__ import annotations
 
-from collections.abc import MutableMapping
+import asyncio
+from typing import TYPE_CHECKING, Any
 
 from swiftclient import Connection
 from swiftclient.exceptions import ClientException
-from zarr.util import normalize_storage_path
-from numcodecs.compat import ensure_bytes
+
+from zarr.abc.store import (
+    OffsetByteRequest,
+    RangeByteRequest,
+    Store,
+    SuffixByteRequest,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable
+
+    from zarr.abc.store import ByteRequest
+    from zarr.core.buffer import Buffer, BufferPrototype
 
 
-class SwiftStore(MutableMapping):
-    """Storage class using Openstack Swift Object Store.
+class SwiftStore(Store):
+    """zarr v3 storage backend for OpenStack Swift Object Storage.
 
     Parameters
     ----------
-    container: string
-        swift container to use. It is created if it does not already exists
-    prefix: string
-        sub-directory path with in the container to store data
-    storage_options: dict
-        authentication information to connect to the swift store.
+    container:
+        Swift container name. Created on ``open()`` if it does not exist.
+    prefix:
+        Optional path prefix inside the container.
+    storage_options:
+        Keyword arguments forwarded to ``swiftclient.Connection`` (e.g.
+        ``preauthurl``, ``preauthtoken``, ``authurl``, ``user``, ``key``).
+    read_only:
+        Open the store in read-only mode.
 
     Examples
     --------
-
-    >>> import os
+    >>> import os, zarr
     >>> from zarrswift import SwiftStore
-    >>> getenv = os.environ.get
-    >>> options = {'preauthurl': getenv('OS_STORAGE_URL'),
-    ...            'preauthtoken': getenv('OS_AUTH_TOKEN')}
-    >>> store = SwiftStore(container="demo", prefix="zarr_demo", storage_options=options)
-    >>> root = zarr.group(store=store, overwrite=True)
-    >>> z = root.zeros('foo/bar', shape=(10, 10), chunks=(5, 5), dtype='i4')
-    >>> z[:] = 42
+    >>> store = await SwiftStore.open(
+    ...     container="demo",
+    ...     prefix="zarr_demo",
+    ...     storage_options={
+    ...         "preauthurl": os.environ["OS_STORAGE_URL"],
+    ...         "preauthtoken": os.environ["OS_AUTH_TOKEN"],
+    ...     },
+    ... )
+    >>> root = zarr.open_group(store=store, mode="w")
     """
 
-    def __init__(self, container, prefix="", storage_options=None):
+    supports_writes: bool = True
+    supports_deletes: bool = True
+    supports_listing: bool = True
+
+    def __init__(
+        self,
+        container: str,
+        prefix: str = "",
+        storage_options: dict[str, Any] | None = None,
+        *,
+        read_only: bool = False,
+    ) -> None:
+        super().__init__(read_only=read_only)
         self.container = container
-        self.prefix = normalize_storage_path(prefix)
+        self.prefix = prefix.strip("/")
         self.storage_options = storage_options or {}
         self.conn = Connection(**self.storage_options)
-        self._ensure_container()
 
-    def __getstate__(self):
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    async def _open(self) -> None:
+        await self._ensure_container()
+        await super()._open()
+
+    def with_read_only(self, read_only: bool = False) -> SwiftStore:
+        return type(self)(
+            self.container,
+            prefix=self.prefix,
+            storage_options=self.storage_options,
+            read_only=read_only,
+        )
+
+    # ------------------------------------------------------------------
+    # Pickle support (Connection is not picklable)
+    # ------------------------------------------------------------------
+
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         del state["conn"]
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         self.conn = Connection(**self.storage_options)
 
-    def __getitem__(self, name):
-        name = self._add_prefix(name)
-        try:
-            resp, content = self.conn.get_object(self.container, name)
-        except ClientException:
-            raise KeyError("Object {} not found".format(name))
-        return content
+    # ------------------------------------------------------------------
+    # Identity
+    # ------------------------------------------------------------------
 
-    def __setitem__(self, name, value):
-        name = self._add_prefix(name)
-        value = ensure_bytes(value)
-        self.conn.put_object(self.container, name, value)
+    def __repr__(self) -> str:
+        return f"SwiftStore(container={self.container!r}, prefix={self.prefix!r})"
 
-    def __delitem__(self, name):
-        name = self._add_prefix(name)
-        try:
-            self.conn.delete_object(self.container, name)
-        except ClientException:
-            raise KeyError("Object {} not found".format(name))
-
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, SwiftStore)
             and self.container == other.container
             and self.prefix == other.prefix
         )
 
-    def __contains__(self, name):
-        return name in self.keys()
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-    def __iter__(self):
-        contents = self._list_container(strip_prefix=True)
-        for entry in contents:
-            yield entry["name"]
+    def _full_key(self, key: str) -> str:
+        """Build the full Swift object name from a store-relative key."""
+        if not self.prefix:
+            return key
+        return f"{self.prefix}/{key}" if key else f"{self.prefix}/"
 
-    def __len__(self):
-        return len(self.keys())
+    def _strip_prefix(self, full_key: str) -> str:
+        """Remove the store prefix from a full Swift object name."""
+        if self.prefix:
+            drop = len(self.prefix) + 1  # prefix + "/"
+            return full_key[drop:]
+        return full_key
 
-    def _ensure_container(self):
-        _, contents = self.conn.get_account()
-        listings = [item["name"] for item in contents]
-        if self.container not in listings:
-            self.conn.put_container(self.container)
+    async def _ensure_container(self) -> None:
+        """Create the Swift container if it does not already exist."""
+        def _check_or_create() -> None:
+            _, listings = self.conn.get_account()
+            names = {item["name"] for item in listings}
+            if self.container not in names:
+                self.conn.put_container(self.container)
 
-    def _add_prefix(self, path):
-        path = normalize_storage_path(path)
-        path = "/".join([self.prefix, path])
-        return normalize_storage_path(path)
+        await asyncio.to_thread(_check_or_create)
 
-    def _list_container(
-        self, path=None, delimiter=None, strip_prefix=False, treat_path_as_dir=True
-    ):
-        path = self.prefix if path is None else self._add_prefix(path)
-        if path and treat_path_as_dir:
-            path += "/"
-        _, contents = self.conn.get_container(
-            self.container, prefix=path, delimiter=delimiter
+    @staticmethod
+    def _range_header(byte_range: ByteRequest) -> str:
+        if isinstance(byte_range, RangeByteRequest):
+            return f"bytes={byte_range.start}-{byte_range.end - 1}"
+        if isinstance(byte_range, OffsetByteRequest):
+            return f"bytes={byte_range.offset}-"
+        if isinstance(byte_range, SuffixByteRequest):
+            return f"bytes=-{byte_range.suffix}"
+        raise ValueError(f"Unexpected byte_range, got {byte_range}.")
+
+    # ------------------------------------------------------------------
+    # Core async store interface
+    # ------------------------------------------------------------------
+
+    async def get(
+        self,
+        key: str,
+        prototype: BufferPrototype,
+        byte_range: ByteRequest | None = None,
+    ) -> Buffer | None:
+        full_key = self._full_key(key)
+        if byte_range is not None and not isinstance(
+            byte_range, (RangeByteRequest, OffsetByteRequest, SuffixByteRequest)
+        ):
+            raise ValueError(f"Unexpected byte_range, got {byte_range}.")
+
+        headers = {"Range": self._range_header(byte_range)} if byte_range is not None else {}
+
+        def _fetch() -> bytes:
+            _, content = self.conn.get_object(
+                self.container, full_key, headers=headers or None
+            )
+            return content
+
+        try:
+            content = await asyncio.to_thread(_fetch)
+        except ClientException:
+            return None
+        return prototype.buffer.from_bytes(content)
+
+    async def get_partial_values(
+        self,
+        prototype: BufferPrototype,
+        key_ranges: Iterable[tuple[str, ByteRequest | None]],
+    ) -> list[Buffer | None]:
+        return list(
+            await asyncio.gather(
+                *(self.get(key, prototype, byte_range) for key, byte_range in key_ranges)
+            )
         )
-        if strip_prefix:
-            prefix_size = len(path)
-            for entry in contents:
-                name = entry.get('name', entry.get('subdir', ''))
-                entry["name"] = normalize_storage_path(name[prefix_size:])
-        for entry in contents:
-            entry["bytes"] = entry.get("bytes", 0)
-        return contents
 
-    def keys(self):
-        return list(self.__iter__())
+    async def exists(self, key: str) -> bool:
+        full_key = self._full_key(key)
+        try:
+            await asyncio.to_thread(self.conn.head_object, self.container, full_key)
+            return True
+        except ClientException:
+            return False
 
-    def listdir(self, path=None):
-        contents = self._list_container(path, delimiter="/", strip_prefix=True)
-        listings = [entry["name"] for entry in contents]
-        return sorted(listings)
+    async def set(self, key: str, value: Buffer) -> None:
+        self._check_writable()
+        full_key = self._full_key(key)
+        data = value.to_bytes()
+        await asyncio.to_thread(self.conn.put_object, self.container, full_key, data)
 
-    def getsize(self, path=None):
-        contents = self._list_container(
-            path, strip_prefix=True, treat_path_as_dir=False
+    async def delete(self, key: str) -> None:
+        self._check_writable()
+        full_key = self._full_key(key)
+        try:
+            await asyncio.to_thread(self.conn.delete_object, self.container, full_key)
+        except ClientException:
+            pass  # idempotent — key may not exist
+
+    # ------------------------------------------------------------------
+    # Listing
+    # ------------------------------------------------------------------
+
+    async def list(self) -> AsyncIterator[str]:
+        async for key in self.list_prefix(""):
+            yield key
+
+    async def list_prefix(self, prefix: str) -> AsyncIterator[str]:
+        full_prefix = self._full_key(prefix)
+        _, contents = await asyncio.to_thread(
+            self.conn.get_container, self.container, prefix=full_prefix
         )
-        contents = [entry for entry in contents if "/" not in entry["name"]]
-        return sum([entry["bytes"] for entry in contents])
-
-    def rmdir(self, path=None):
-        contents = self._list_container(path)
         for entry in contents:
-            self.conn.delete_object(self.container, entry["name"])
+            name = entry.get("name", "")
+            if name:
+                yield self._strip_prefix(name)
 
-    def clear(self):
-        self.rmdir()
+    async def list_dir(self, prefix: str) -> AsyncIterator[str]:
+        if prefix:
+            full_prefix = self._full_key(prefix.rstrip("/")) + "/"
+        elif self.prefix:
+            full_prefix = f"{self.prefix}/"
+        else:
+            full_prefix = ""
+
+        _, contents = await asyncio.to_thread(
+            self.conn.get_container,
+            self.container,
+            prefix=full_prefix,
+            delimiter="/",
+        )
+        for entry in contents:
+            # "name" → actual object at this level
+            # "subdir" → virtual directory
+            name = entry.get("name") or entry.get("subdir", "")
+            if not name:
+                continue
+            relative = name[len(full_prefix):].rstrip("/")
+            if relative:
+                yield relative
+
+    # ------------------------------------------------------------------
+    # Efficient size queries using Swift HEAD
+    # ------------------------------------------------------------------
+
+    async def getsize(self, key: str) -> int:
+        full_key = self._full_key(key)
+        try:
+            headers = await asyncio.to_thread(
+                self.conn.head_object, self.container, full_key
+            )
+            return int(headers.get("content-length", 0))
+        except ClientException:
+            raise FileNotFoundError(key)
+
+    # ------------------------------------------------------------------
+    # Convenience
+    # ------------------------------------------------------------------
 
     @property
-    def url(self):
-        _url = '/'.join([self.conn.url, self.container, self.prefix])
-        if not self.prefix:
-            _url = _url.rstrip('/')
-        return _url
+    def url(self) -> str:
+        """Public URL of the store root."""
+        parts = [self.conn.url, self.container]
+        if self.prefix:
+            parts.append(self.prefix)
+        return "/".join(parts)

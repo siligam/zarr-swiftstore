@@ -1,93 +1,126 @@
-# -*- coding: utf-8 -*-
+"""
+Integration tests for SwiftStore against a live OpenStack Swift service.
 
-import unittest
+Set ZARR_TEST_SWIFT=1 and the Swift auth environment variables to run:
+
+    export ZARR_TEST_SWIFT=1
+    export ST_AUTH=http://localhost:8080/auth/v1.0
+    export ST_USER=test:tester
+    export ST_KEY=testing
+    pytest -v zarrswift/tests/test_storage.py
+"""
+
+from __future__ import annotations
+
+import asyncio
 import os
+from typing import TYPE_CHECKING, Any
+
+import pytest
+from zarr.core.buffer import Buffer, default_buffer_prototype
+from zarr.testing.store import StoreTests
 
 from .. import SwiftStore
 
-from zarr.tests.test_storage import StoreTests
-from zarr.tests.util import skip_test_env_var
+if TYPE_CHECKING:
+    pass
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("ZARR_TEST_SWIFT"),
+    reason="Set ZARR_TEST_SWIFT=1 to run Swift integration tests",
+)
 
 
-def list_containers(conn):
-    _, contents = conn.get_account()
-    containers = [entry["name"] for entry in contents]
-    return containers
+class TestSwiftStore(StoreTests[SwiftStore, Buffer]):
+    store_cls = SwiftStore
+    buffer_cls = Buffer
 
+    # ------------------------------------------------------------------
+    # Fixtures
+    # ------------------------------------------------------------------
 
-@skip_test_env_var("ZARR_TEST_SWIFT")
-class TestSwiftStore(StoreTests, unittest.TestCase):
-    def create_store(self, prefix=None):
-        getenv = os.environ.get
+    @pytest.fixture
+    def store_kwargs(self) -> dict[str, Any]:
         options = {
-            "preauthurl": getenv("OS_STORAGE_URL"),
-            "preauthtoken": getenv("OS_AUTH_TOKEN"),
-            "authurl": getenv("ST_AUTH"),
-            "user": getenv("ST_USER"),
-            "key": getenv("ST_KEY"),
+            "authurl": os.environ.get("ST_AUTH"),
+            "user": os.environ.get("ST_USER"),
+            "key": os.environ.get("ST_KEY"),
+            "preauthurl": os.environ.get("OS_STORAGE_URL"),
+            "preauthtoken": os.environ.get("OS_AUTH_TOKEN"),
         }
-        store = SwiftStore(
-            container="test_swiftstore", prefix=prefix, storage_options=options
-        )
-        store.clear()
+        options = {k: v for k, v in options.items() if v}
+        return {
+            "container": "test_swiftstore",
+            "prefix": "test_zarr",
+            "storage_options": options,
+        }
+
+    @pytest.fixture
+    async def store(self, open_kwargs: dict[str, Any]) -> SwiftStore:
+        store = await SwiftStore.open(**open_kwargs)
+        await store.clear()
+        yield store
+        await store.clear()
+        store.close()
+
+    @pytest.fixture
+    async def store_not_open(self, store_kwargs: dict[str, Any]) -> SwiftStore:
+        # Open the store to ensure the container exists, then reset _is_open
+        # so the test can exercise "not-yet-open" code paths.
+        store = await SwiftStore.open(**store_kwargs)
+        store._is_open = False
         return store
 
-    def test_iterators_with_prefix(self):
-        for prefix in [
-            "test_prefix",
-            "/test_prefix",
-            "test_prefix/",
-            "test/prefix",
-            "",
-            None,
-        ]:
-            store = self.create_store(prefix=prefix)
+    # ------------------------------------------------------------------
+    # Required abstract test methods
+    # ------------------------------------------------------------------
 
-            # test iterator methods on empty store
-            assert 0 == len(store)
-            assert set() == set(store)
-            assert set() == set(store.keys())
-            assert set() == set(store.values())
-            assert set() == set(store.items())
+    def test_store_repr(self, store: SwiftStore) -> None:
+        assert "SwiftStore" in repr(store)
+        assert store.container in repr(store)
 
-            # setup some values
-            store["a"] = b"aaa"
-            store["b"] = b"bbb"
-            store["c/d"] = b"ddd"
-            store["c/e/f"] = b"fff"
+    def test_store_supports_writes(self, store: SwiftStore) -> None:
+        assert store.supports_writes
 
-            # test iterators on store with data
-            assert 4 == len(store)
-            assert {"a", "b", "c/d", "c/e/f"} == set(store)
-            assert {"a", "b", "c/d", "c/e/f"} == set(store.keys())
-            assert {b"aaa", b"bbb", b"ddd", b"fff"} == set(store.values())
-            assert {
-                ("a", b"aaa"),
-                ("b", b"bbb"),
-                ("c/d", b"ddd"),
-                ("c/e/f", b"fff"),
-            } == set(store.items())
+    def test_store_supports_listing(self, store: SwiftStore) -> None:
+        assert store.supports_listing
 
-    def test_equal(self):
-        store1 = self.create_store()
-        store2 = self.create_store()
-        assert store1 == store2
+    # ------------------------------------------------------------------
+    # Required abstract helpers (bypass store API for raw access)
+    # ------------------------------------------------------------------
 
-    def test_ensure_container(self):
+    async def set(self, store: SwiftStore, key: str, value: Buffer) -> None:
+        """Write directly to Swift without going through store.set()."""
+        full_key = store._full_key(key)
+        data = value.to_bytes()
+        await asyncio.to_thread(store.conn.put_object, store.container, full_key, data)
+
+    async def get(self, store: SwiftStore, key: str) -> Buffer:
+        """Read directly from Swift without going through store.get()."""
+        full_key = store._full_key(key)
+        _, content = await asyncio.to_thread(
+            store.conn.get_object, store.container, full_key
+        )
+        return Buffer.from_bytes(content)
+
+    # ------------------------------------------------------------------
+    # SwiftStore-specific tests
+    # ------------------------------------------------------------------
+
+    async def test_url(self, store: SwiftStore) -> None:
+        assert store.container in store.url
+        assert store.prefix in store.url
+
+    async def test_ensure_container(self, store: SwiftStore) -> None:
         import uuid
-        store = self.create_store()
-        assert store.container in list_containers(store.conn)
-        store.container = str(uuid.uuid4())[:6]
-        assert store.container not in list_containers(store.conn)
-        store._ensure_container()
-        assert store.container in list_containers(store.conn)
-        store.conn.delete_container(store.container)
-        assert store.container not in list_containers(store.conn)
-
-    def test_url(self):
-        store = self.create_store()
-        url = '/'.join([store.conn.url, store.container])
-        assert url == store.url
-        store = self.create_store(prefix='test_prefix')
-        url = '/'.join([store.conn.url, store.container, store.prefix])
-        assert url == store.url
+        new_name = f"test-{uuid.uuid4().hex[:8]}"
+        store2 = await SwiftStore.open(
+            new_name,
+            storage_options=store.storage_options,
+        )
+        _, listings = await asyncio.to_thread(store2.conn.get_account)
+        names = {item["name"] for item in listings}
+        assert new_name in names
+        # clean up
+        await asyncio.to_thread(store2.conn.delete_container, new_name)
+        store2.close()

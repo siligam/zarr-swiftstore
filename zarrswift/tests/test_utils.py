@@ -2,9 +2,14 @@
 
 import os
 import pytest
-import mock
+from unittest import mock
 from .. import SwiftStore
 from .. import utils
+
+skip_no_swift = pytest.mark.skipif(
+    not os.environ.get("ZARR_TEST_SWIFT"),
+    reason="Set ZARR_TEST_SWIFT=1 to run Swift integration tests",
+)
 
 
 def test_getenv_auth():
@@ -45,6 +50,7 @@ def test_getenv_auth():
     os.environ.update(auth)
 
 
+@skip_no_swift
 def test_acquire_token():
     
     authurl = os.environ.get('ST_AUTH')
@@ -76,6 +82,7 @@ def test_acquire_token():
         utils.acquire_token(authurl, user, update_env=False)
 
 
+@skip_no_swift
 def test_is_public():
     auth = {
         "authurl": os.environ.get('ST_AUTH'),
@@ -99,6 +106,7 @@ def test_is_public():
     store.conn.post_container(store.container, headers=headers)
 
 
+@skip_no_swift
 def test_toggle_public():
     auth = {
         "authurl": os.environ.get('ST_AUTH'),

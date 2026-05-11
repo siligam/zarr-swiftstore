@@ -28,7 +28,10 @@ classifiers = [
 Homepage = "https://github.com/siligam/zarr-swiftstore"
 
 [project.optional-dependencies]
-dev = ["pytest", "coverage"]
+dev = ["pytest", "pytest-asyncio", "coverage"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.setuptools_scm]
 # version is derived from git tags (e.g. tag v1.2.3 → version 1.2.3)

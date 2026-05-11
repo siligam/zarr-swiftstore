@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from zarr.core.buffer import Buffer, default_buffer_prototype
+from zarr.core.buffer import cpu as cpu_buffer
 from zarr.testing.store import StoreTests
 
 from .. import SwiftStore
@@ -31,9 +32,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-class TestSwiftStore(StoreTests[SwiftStore, Buffer]):
+class TestSwiftStore(StoreTests[SwiftStore, cpu_buffer.Buffer]):
     store_cls = SwiftStore
-    buffer_cls = Buffer
+    buffer_cls = cpu_buffer.Buffer
 
     # ------------------------------------------------------------------
     # Fixtures
@@ -101,7 +102,7 @@ class TestSwiftStore(StoreTests[SwiftStore, Buffer]):
         _, content = await asyncio.to_thread(
             store.conn.get_object, store.container, full_key
         )
-        return Buffer.from_bytes(content)
+        return cpu_buffer.Buffer.from_bytes(content)
 
     # ------------------------------------------------------------------
     # SwiftStore-specific tests

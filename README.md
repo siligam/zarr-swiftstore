@@ -34,6 +34,9 @@ option for these deployments.
 If your OpenStack cluster provides full Keystone and EC2 credentials, you can use
 `zarr.storage.FsspecStore` with `swiftspec` or `s3fs` instead.
 
+See [ADR 001](docs/adr/001-native-swift-over-s3-compat.md) for the full
+investigation behind this decision.
+
 ## Install
 
 ```bash
